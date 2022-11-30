@@ -1,6 +1,9 @@
 # 6998_final_backend
 serverless backend running on google app engine
 
+## Endpoint
+https://glass-mantra-365915.ue.r.appspot.com
+
 ## APIs
 - /
   - GET: return health status of backend
@@ -28,7 +31,7 @@ serverless backend running on google app engine
   - GET: return the status of an import operation
 
 ## Input format
-** product search query **
+**product search query**
 ```
 {
     'imageBlob': <base64 encoded> [required],
@@ -41,7 +44,7 @@ serverless backend running on google app engine
 }
 ```
 
-** import csv query **
+**import csv query**
 ```
 {
     'gcs_uri': <gs link> [required],
