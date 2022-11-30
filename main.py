@@ -1,5 +1,4 @@
 from flask import Flask, Response, request
-from flask_login import login_user, logout_user, login_required
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import json
@@ -65,15 +64,19 @@ def search():
     query = parse_product_search_request(request)
     if type(query) == type(''):
         return _Error(query)
+    (json_key, endpoint, product_search_request_json) = query
+    
+    cred = get_authed_session(json_key)
+    if type(cred) == type(Exception):
+        return _Error(cred, msg="Error retrieving google authed session")
+    (_, authed_session) = cred
+    
     try:
-        (json_key, endpoint, product_search_request_json) = query
-        credentials = service_account.Credentials.from_service_account_info(json_key)
-        scoped_credentials = credentials.with_scopes(_DEFAULT_SCOPES)
-        authed_session = AuthorizedSession(scoped_credentials)
         url = os.path.join(endpoint, 'images:annotate')
         response = authed_session.post( url=url, data=json.dumps(product_search_request_json) ).json()
     except Exception as e:
         return _Error(e, msg="Internal error when calling google vision api")
+    
     try:
         results = response["responses"][0]["productSearchResults"]["results"]
         for i in range(len(results)):
@@ -89,6 +92,89 @@ def search():
     return _Success(response)
 
 
+# import data
+@app.route('/import', methods=["POST"])
+def upload():
+    (url, body) = import_request(request)
+    if body is not None:
+        url = os.path.join(url, 'productSets:import')
+    else:
+        return _Error("Invalid gcs_uri provided")
+
+    cred = get_authed_session()
+    if type(cred) == type(Exception):
+        return _Error(cred, msg="Error retrieving google authed session")
+    (_, authed_session) = cred
+
+    try:
+        response = authed_session.post( url=url, data=json.dumps(body) ).json()
+    except Exception as e:
+        return _Error(e, msg="Internal error when calling google vision api")
+
+    return _Success(response)
+
+
+# check import status
+@app.route('/import/<operation_id>', methods=["GET"])
+def upload_status(operation_id):
+    url = os.path.join( import_request(request)[0], 'operations', operation_id )
+
+    cred = get_authed_session()
+    if type(cred) == type(Exception):
+        return _Error(cred, msg="Error retrieving google authed session")
+    (_, authed_session) = cred
+
+    try:
+        response = authed_session.get( url=url ).json()
+    except Exception as e:
+        return _Error(e, msg="Internal error when calling google vision api")
+
+    return _Success(response)
+
+
+
+# list product sets
+@app.route('/import', methods=["GET"])
+def show_sets():
+    url = os.path.join( import_request(request)[0], 'productSets' )
+
+    cred = get_authed_session()
+    if type(cred) == type(Exception):
+        return _Error(cred, msg="Error retrieving google authed session")
+    (_, authed_session) = cred
+
+    try:
+        response = authed_session.get( url=url ).json()
+    except Exception as e:
+        return _Error(e, msg="Internal error when calling google vision api")
+
+    return _Success(response)
+
+
+# delete a product set
+@app.route('/import/<product_set_id>', methods=["DELETE"])
+def delete_set(product_set_id):
+    url = os.path.join( import_request(request)[0], 'productSets', product_set_id )
+
+    cred = get_authed_session()
+    if type(cred) == type(Exception):
+        return _Error(cred, msg="Error retrieving google authed session")
+    (_, authed_session) = cred
+
+    try:
+        response = authed_session.delete( url=url ).json()
+    except Exception as e:
+        return _Error(e, msg="Internal error when calling google vision api")
+
+    return _Success(response)
+
+
+# login
+@app.route('/login', methods=["POST"])
+def login():
+    pass
+
+
 '''
 Helper methods
 -----------------------------------------------------------
@@ -102,6 +188,16 @@ def _Error(e, msg="an error occured"):
         'error': str(e)
     }
     return Response(json.dumps(res), status=500, content_type="application/json")
+
+
+def get_authed_session(json_key=GCP_KEY):
+    try:
+        credentials = service_account.Credentials.from_service_account_info(json_key)
+        scoped_credentials = credentials.with_scopes(_DEFAULT_SCOPES)
+        authed_session = AuthorizedSession(scoped_credentials)
+    except Exception as e:
+        return e
+    return (credentials, authed_session)
 
 
 def ParseBoundingPoly(poly_str):
@@ -151,10 +247,14 @@ def parse_product_search_request(req):
     if endpoint == '':
         endpoint = SEARCH_CONFIG['endpoint']
 
+    location = req.form.get('location', '')
+    if location == '':
+        location = SEARCH_CONFIG['location']
+
     json_key = GCP_KEY
     product_set = 'projects/' +\
         GCP_KEY['project_id'] + '/locations/' +\
-        SEARCH_CONFIG['location'] + '/productSets/' +\
+        location + '/productSets/' +\
         product_set_id
     
     try:
@@ -199,12 +299,12 @@ def get_match_image(product, endpoint):
         return ("Invalid product/item", e)
     url = os.path.join(endpoint, product)
 
-    json_key = GCP_KEY
+    cred = get_authed_session()
+    if type(cred) == type(Exception):
+        return _Error(cred, msg="Error retrieving google authed session")
+    (credentials, authed_session) = cred
 
     try:
-        credentials = service_account.Credentials.from_service_account_info(json_key)
-        scoped_credentials = credentials.with_scopes(_DEFAULT_SCOPES)
-        authed_session = AuthorizedSession(scoped_credentials)
         response = authed_session.get(url=url).json()
     except Exception as e:
         return ("Image not found", e)
@@ -213,7 +313,7 @@ def get_match_image(product, endpoint):
         return ("Image {} not found".format(img), str(response))
 
     try:
-        gcs_client = storage.Client( project=json_key["project_id"], credentials=credentials )
+        gcs_client = storage.Client( project=GCP_KEY["project_id"], credentials=credentials )
         bucket, path = parse_gcs_uri(response["uri"])
         blob = gcs_client.bucket(bucket).blob(path)
     except Exception as e:
@@ -231,6 +331,35 @@ def parse_gcs_uri(gcs_uri):
         return None, None
     return splitted[2], '/'.join(splitted[3:])
 
+
+def import_request(req):
+    gcs_uri = req.form.get('gcs_uri', '')
+
+    endpoint = req.form.get('endpoint', '')
+    if endpoint == '':
+        endpoint = req.args.get('endpoint', '')
+        if endpoint == '':
+            endpoint = SEARCH_CONFIG['endpoint']
+    
+    location = req.form.get('location', '')
+    if location == '':
+        location = req.args.get('endpoint', '')
+        if location == '':
+            location = SEARCH_CONFIG['location']
+
+    url = os.path.join(endpoint, 'projects', GCP_KEY['project_id'], 'locations', location)
+    body = {
+        'input_config': {
+            'gcs_source': {
+                'csv_file_uri': gcs_uri
+            }
+        }
+    }
+
+    if 'gs://' not in gcs_uri or '.csv' not in gcs_uri:
+        body = None
+
+    return (url, body)
 
 '''
 Start flask server

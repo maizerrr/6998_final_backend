@@ -17,10 +17,18 @@ serverless backend running on google app engine
 - /profile \[login_required\]
   - GET: return info of current user
 
-- /upload \[login_required\]
-  - POST: expect csv containing filenames and gs links, return success or not
+- /import \[login_required\]
+  - GET: return a list of existing product sets
+  - POST: expect json query, return success or not
 
-## Product Search Query
+- /import/{product_set_id} \[login_required\]
+  - DELETE: delete the given product set (files on gcs will not be removed)
+
+- /import/{operation_id} \[login_required\]
+  - GET: return the status of an import operation
+
+## Input format
+** product search query **
 ```
 {
     'imageBlob': <base64 encoded> [required],
@@ -28,6 +36,16 @@ serverless backend running on google app engine
     'productSetId': <String>,
     'category': 'homegoods-v2' | 'apparel-v2' | 'toys-v2' | 'packagedgoods-v1' | 'general-v1',
     'endpoint': <Url>,
+    'location': <String>,
     'boundingPoly': <JSON String>
+}
+```
+
+** import csv query **
+```
+{
+    'gcs_uri': <gs link> [required],
+    'endpoint': <Url>,
+    'location': <String>
 }
 ```

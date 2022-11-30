@@ -1,0 +1,5 @@
+runtime: python37
+entrypoint: gunicorn -b :$PORT main:app
+
+env_variables:
+  GCP_KEY: "Your GCP access token goes here"
