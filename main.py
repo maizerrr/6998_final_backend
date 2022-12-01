@@ -1,5 +1,5 @@
 from flask import Flask, Response, request
-from flask_cors import CORS
+# from flask_cors import CORS, cross_origin
 from datetime import datetime, timedelta
 import json
 import sys
@@ -21,8 +21,8 @@ Initializing app
 
 # Create the Flask application object.
 application = app = Flask(__name__)
-
-CORS(app)
+# CORS(app)
+# app.config['CORS_HEADERS'] = 'Content-Type'
 
 
 # Default values & api keys
@@ -180,14 +180,22 @@ Helper methods
 -----------------------------------------------------------
 '''
 def _Success(msg):
-    return Response(json.dumps(msg), status=200, content_type="application/json")
+    res = Response(json.dumps(msg), status=200, content_type="application/json")
+    res.headers["Access-Control-Allow-Origin"] = "*"
+    res.headers["Access-Control-Allow-Headers"] = "*"
+    res.headers["Access-Control-Allow-Methods"] = "*"
+    return res
 
 def _Error(e, msg="an error occured"):
     res = {
         'message': msg,
         'error': str(e)
     }
-    return Response(json.dumps(res), status=500, content_type="application/json")
+    res =  Response(json.dumps(res), status=500, content_type="application/json")
+    res.headers["Access-Control-Allow-Origin"] = "*"
+    res.headers["Access-Control-Allow-Headers"] = "*"
+    res.headers["Access-Control-Allow-Methods"] = "*"
+    return res
 
 
 def get_authed_session(json_key=GCP_KEY):
