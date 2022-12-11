@@ -4,6 +4,12 @@ serverless backend running on google app engine
 ## Endpoint
 https://glass-mantra-365915.ue.r.appspot.com
 
+## Cloud Computing Services
+- google cloud app engine
+- google cloud storage
+- google cloud sql
+- google cloud vision api
+
 ## APIs
 - /
   - GET: return health status of backend
@@ -62,3 +68,4 @@ Header
 
 ## References
 1. flask token-based user login <a href='https://www.geeksforgeeks.org/using-jwt-for-user-authentication-in-flask/'>link</a>
+2. cloud sql connection <a href='https://cloud.google.com/sql/docs/mysql/connect-app-engine-standard'>link\[1\]</a> <a href='https://stackoverflow.com/questions/72588424/app-engine-cant-connect-to-cloud-sql-connection-refused'>link\[2\]</a>
