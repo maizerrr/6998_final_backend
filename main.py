@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 from datetime import datetime, timedelta
 from  werkzeug.security import generate_password_hash, check_password_hash
+import sqlalchemy
 import jwt
 import json
 import sys
@@ -38,7 +39,17 @@ _DEFAULT_SCOPES = (
 
 
 # TODO: link to database
-DB_URI = os.getenv('DB_URI')
+if os.getenv('DB_CRED'):
+    DB_CRED = json.loads(os.getenv('DB_CRED'))
+    DB_URI = sqlalchemy.engine.url.URL.create(
+        drivername="mysql+pymysql",
+        username=DB_CRED['username'],
+        password=DB_CRED['password'],
+        database=DB_CRED['database'],
+        query={ 'unix_socket': DB_CRED['unix_socket'] }
+    )
+else:
+    DB_URI = os.getenv('DB_URI')
 
 
 # Create the Flask application object.
