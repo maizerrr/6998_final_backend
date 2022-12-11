@@ -1,6 +1,9 @@
 from flask import Flask, Response, request
-# from flask_cors import CORS, cross_origin
+from flask_sqlalchemy import SQLAlchemy
+from functools import wraps
 from datetime import datetime, timedelta
+from  werkzeug.security import generate_password_hash, check_password_hash
+import jwt
 import json
 import sys
 import os
@@ -16,15 +19,6 @@ from base64 import b64encode
 Initializing app
 -----------------------------------------------------------
 '''
-# TODO: link to database
-
-
-# Create the Flask application object.
-application = app = Flask(__name__)
-# CORS(app)
-# app.config['CORS_HEADERS'] = 'Content-Type'
-
-
 # Default values & api keys
 GCP_KEY = json.loads(os.getenv('GCP_KEY'))
 SEARCH_CONFIG = {
@@ -34,12 +28,60 @@ SEARCH_CONFIG = {
     'product_category': 'apparel-v2',
     'endpoint': 'https://vision.googleapis.com/v1'
 }
+TIMEOUT = 30
 
 _DEFAULT_URL_EXPIRATION = timedelta(minutes=30)
 _DEFAULT_SCOPES = (
     'https://www.googleapis.com/auth/cloud-platform',
     'https://www.googleapis.com/auth/cloud-vision',
 )
+
+
+# TODO: link to database
+DB_URI = os.getenv('DB_URI')
+
+
+# Create the Flask application object.
+application = app = Flask(__name__)
+app.config['SECRET_KEY'] = json.dumps(GCP_KEY)
+app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
+db = SQLAlchemy(app)
+
+
+'''
+User login
+-----------------------------------------------------------
+'''
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key = True)
+    email = db.Column(db.String(70), nullable=False, unique = True)
+    password = db.Column(db.String(300), nullable=False)
+    admin = db.Column(db.Boolean)
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kargs):
+        token = None
+        if 'x-access-token' in request.headers:
+            token = request.headers['x-access-token']
+        else:
+            return _Denied('Access token is missing')
+        
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query\
+                .filter_by(email = data['email'])\
+                .first()
+        except Exception as e:
+            return _Denied(str(e))
+
+        if not data or not current_user:
+            return _Denied('User no longer exists')
+
+        return f(current_user, *args, **kargs)
+    return decorated
+
 
 
 '''
@@ -172,7 +214,73 @@ def delete_set(product_set_id):
 # login
 @app.route('/login', methods=["POST"])
 def login():
-    pass
+    auth = request.form
+
+    if not auth or not auth.get('email') or not auth.get('password'):
+        return _Denied('Please provide login credentials')
+    
+    user = User.query\
+        .filter_by(email = auth.get('email'))\
+        .first()
+
+    if not user:
+        return _Denied('Username or password incorrect', status=403)
+
+    if check_password_hash(user.password, auth.get('password')):
+        token = jwt.encode(
+            {
+                'email': user.email,
+                'exp': datetime.utcnow() + timedelta(minutes=TIMEOUT)
+            },
+            app.config['SECRET_KEY'], 
+            algorithm="HS256"
+        )
+        return _Success({ 'token': token })
+
+    return _Denied('Username or password incorrect', status=403)
+
+
+# signup
+@app.route('/signup', methods=["POST"])
+def signup():
+    data = request.form
+
+    if not data or not data.get('email') or not data.get('password'):
+        return _Denied('Please provide user email and password')
+
+    user = User.query\
+        .filter_by(email = data.get('email'))\
+        .first()
+
+    if not user:
+        user = User(
+            email = data.get('email'),
+            password = generate_password_hash(data.get('password'))
+        )
+        db.session.add(user)
+        db.session.commit()
+        return _Success( { 'msg': 'Successfully registered' } )
+    else:
+        return _Denied( 'User already exists. Please Log in.', status=202 )
+
+# user profile
+@app.route('/profile', methods=["GET", "POST"])
+@login_required
+def profile(current_user):
+    if request.method == "POST":
+        data = request.form
+        if data.get('email'):
+            current_user.email = data.get('email')
+        if data.get('password'):
+            current_user.password = generate_password_hash(data.get('password'))
+
+    db.session.commit()
+
+    res = {
+        'id': current_user.id,
+        'email': current_user.email
+    }
+    return _Success(res)
 
 
 '''
@@ -191,7 +299,18 @@ def _Error(e, msg="an error occured"):
         'message': msg,
         'error': str(e)
     }
-    res =  Response(json.dumps(res), status=500, content_type="application/json")
+    res = Response(json.dumps(res), status=500, content_type="application/json")
+    res.headers["Access-Control-Allow-Origin"] = "*"
+    res.headers["Access-Control-Allow-Headers"] = "*"
+    res.headers["Access-Control-Allow-Methods"] = "*"
+    return res
+
+def _Denied(msg, status=401):
+    res = {
+        'message': 'Unauthorized' if status==401 else 'Forbidden',
+        'error': msg
+    }
+    res = Response(json.dumps(res), status=status, content_type="application/json")
     res.headers["Access-Control-Allow-Origin"] = "*"
     res.headers["Access-Control-Allow-Headers"] = "*"
     res.headers["Access-Control-Allow-Methods"] = "*"

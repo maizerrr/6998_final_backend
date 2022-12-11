@@ -20,14 +20,14 @@ https://glass-mantra-365915.ue.r.appspot.com
 - /profile \[login_required\]
   - GET: return info of current user
 
-- /import \[login_required\]
+- /import \[admin_required\]
   - GET: return a list of existing product sets
   - POST: expect json query, return success or not
 
-- /import/{product_set_id} \[login_required\]
+- /import/{product_set_id} \[admin_required\]
   - DELETE: delete the given product set (files on gcs will not be removed)
 
-- /import/{operation_id} \[login_required\]
+- /import/{operation_id} \[admin_required\]
   - GET: return the status of an import operation
 
 ## Input format
@@ -52,3 +52,6 @@ https://glass-mantra-365915.ue.r.appspot.com
     'location': <String>
 }
 ```
+
+## References
+1. flask token-based user login <a href='https://www.geeksforgeeks.org/using-jwt-for-user-authentication-in-flask/'>link</a>
