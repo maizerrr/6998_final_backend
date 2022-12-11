@@ -31,6 +31,13 @@ https://glass-mantra-365915.ue.r.appspot.com
   - GET: return the status of an import operation
 
 ## Input format
+**authentication**
+Access token can be retrieved from '/login' route, and will expire after 30min
+```
+Header
+  x-access-token: <token>
+```
+
 **product search query**
 ```
 {

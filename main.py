@@ -136,7 +136,11 @@ def search():
 
 # import data
 @app.route('/import', methods=["POST"])
-def upload():
+@login_required
+def upload(current_user):
+    if not current_user.admin:
+        return _Denied("User {} does not have administration permission".format(current_user.email), status=403)
+
     (url, body) = import_request(request)
     if body is not None:
         url = os.path.join(url, 'productSets:import')
@@ -158,7 +162,11 @@ def upload():
 
 # check import status
 @app.route('/import/<operation_id>', methods=["GET"])
-def upload_status(operation_id):
+@login_required
+def upload_status(current_user, operation_id):
+    if not current_user.admin:
+        return _Denied("User {} does not have administration permission".format(current_user.email), status=403)
+
     url = os.path.join( import_request(request)[0], 'operations', operation_id )
 
     cred = get_authed_session()
@@ -177,7 +185,11 @@ def upload_status(operation_id):
 
 # list product sets
 @app.route('/import', methods=["GET"])
-def show_sets():
+@login_required
+def show_sets(current_user):
+    if not current_user.admin:
+        return _Denied("User {} does not have administration permission".format(current_user.email), status=403)
+
     url = os.path.join( import_request(request)[0], 'productSets' )
 
     cred = get_authed_session()
@@ -195,7 +207,11 @@ def show_sets():
 
 # delete a product set
 @app.route('/import/<product_set_id>', methods=["DELETE"])
-def delete_set(product_set_id):
+@login_required
+def delete_set(current_user, product_set_id):
+    if not current_user.admin:
+        return _Denied("User {} does not have administration permission".format(current_user.email), status=403)
+
     url = os.path.join( import_request(request)[0], 'productSets', product_set_id )
 
     cred = get_authed_session()
@@ -278,7 +294,8 @@ def profile(current_user):
 
     res = {
         'id': current_user.id,
-        'email': current_user.email
+        'email': current_user.email,
+        'admin': current_user.admin == True
     }
     return _Success(res)
 
