@@ -3,8 +3,10 @@ from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
 from datetime import datetime, timedelta
 from  werkzeug.security import generate_password_hash, check_password_hash
+from random import choice
 import sqlalchemy
 import jwt
+import requests
 import json
 import sys
 import os
@@ -38,7 +40,7 @@ _DEFAULT_SCOPES = (
 )
 
 
-# TODO: link to database
+# link to database
 if os.getenv('DB_CRED'):
     DB_CRED = json.loads(os.getenv('DB_CRED'))
     DB_URI = sqlalchemy.engine.url.URL.create(
@@ -68,6 +70,13 @@ class User(db.Model):
     email = db.Column(db.String(70), nullable=False, unique = True)
     password = db.Column(db.String(300), nullable=False)
     admin = db.Column(db.Boolean)
+    items = db.relationship('Item', backref='user')
+
+class Item(db.Model):
+    id = db.Column(db.String(100), primary_key = True)
+    uid = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key = True)
+    count = db.Column(db.Integer)   # counting num of times a user searched this product
+    detail = db.Column(db.Text)     # storing the json string representing this product
 
 
 def login_required(f):
@@ -141,6 +150,30 @@ def search():
             results[i]['image'] = img['image_url']
     except Exception as e:
         return _Error(e, msg=str(response))
+
+    # check if user is logged in
+    if 'x-access-token' in  request.headers:
+        res = update_search_records(request.headers.get('x-access-token'))
+        if res[0] == 1:
+            current_user = res[1]
+            for result in results:
+                id = product_search_request_json['requests'][0]['image_context']['product_search_params']['product_set'].split('/')[-1]\
+                    + '/' + result['product']['name'].split('/')[-1]
+                uid = current_user.id
+                item = Item.query\
+                    .filter_by(id = id, uid = uid)\
+                    .first()
+                if not item:
+                    item = Item(
+                        id = id,
+                        uid = uid,
+                        count = 1,
+                        detail = json.dumps(result['product'])
+                    )
+                    db.session.add(item)
+                else:
+                    item.count = item.count + 1
+                db.session.commit()
 
     return _Success(response)
 
@@ -242,18 +275,30 @@ def delete_set(current_user, product_set_id):
 @app.route('/login', methods=["POST"])
 def login():
     auth = request.form
+    email, password = None, None
+    is_oauth = False
 
-    if not auth or not auth.get('email') or not auth.get('password'):
+    if auth and auth.get('token'):
+        res = oauth_login(auth.get('token'))
+        if type(res) == type( ('',) ):
+            email, password = res
+            is_oauth = True
+        else:
+            return _Error(res)
+    elif auth and auth.get('email') and auth.get('password'):
+        email, password = auth.get('email'), auth.get('password')
+    
+    if not email or not password:
         return _Denied('Please provide login credentials')
     
     user = User.query\
-        .filter_by(email = auth.get('email'))\
+        .filter_by(email = email)\
         .first()
 
     if not user:
         return _Denied('Username or password incorrect', status=403)
 
-    if check_password_hash(user.password, auth.get('password')):
+    if is_oauth or check_password_hash(user.password, password):
         token = jwt.encode(
             {
                 'email': user.email,
@@ -306,7 +351,8 @@ def profile(current_user):
     res = {
         'id': current_user.id,
         'email': current_user.email,
-        'admin': current_user.admin == True
+        'admin': current_user.admin == True,
+        'items': [item.id for item in current_user.items]
     }
     return _Success(res)
 
@@ -515,6 +561,59 @@ def import_request(req):
         body = None
 
     return (url, body)
+
+
+def generate_pwd(n=10):
+    return ''.join( [chr(choice(list(range(128)))) for _ in range(n)] )
+
+
+def oauth_login(token):
+    url = "https://www.googleapis.com/oauth2/v1/userinfo"
+    payload={}
+    headers = {
+        'Authorization': 'Bearer ' + token
+    }
+    try:
+        response = requests.request('GET', url, headers=headers, data=payload)
+    except Exception as e:
+        return e
+    
+    if 'email' not in response:
+        return response
+
+    email, password = response['email'], generate_pwd()
+
+    user = User.query\
+        .filter_by(email = email)\
+        .first()
+
+    if not user:
+        user = User(
+            email = email,
+            password = generate_password_hash(password)
+        )
+        db.session.add(user)
+        db.session.commit()
+    else:
+        password = ''
+    
+    return (email, password)
+
+
+def update_search_records(token):
+    try:
+        data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+        current_user = User.query\
+            .filter_by(email = data['email'])\
+            .first()
+    except Exception as e:
+        return (0, e)
+
+    if not data or not current_user:
+        return (0, 'User no longer exists')
+
+    return (1, current_user)
+
 
 '''
 Start flask server

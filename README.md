@@ -69,3 +69,4 @@ Header
 ## References
 1. flask token-based user login <a href='https://www.geeksforgeeks.org/using-jwt-for-user-authentication-in-flask/'>link</a>
 2. cloud sql connection <a href='https://cloud.google.com/sql/docs/mysql/connect-app-engine-standard'>link\[1\]</a> <a href='https://stackoverflow.com/questions/72588424/app-engine-cant-connect-to-cloud-sql-connection-refused'>link\[2\]</a>
+3. Google Oauth endpoint: https://www.googleapis.com/oauth2/v1/userinfo?access_token={token}
