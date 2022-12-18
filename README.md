@@ -9,6 +9,7 @@ https://glass-mantra-365915.ue.r.appspot.com
 - google cloud storage
 - google cloud sql
 - google cloud vision api
+- google oauth2 endpoint
 
 ## APIs
 - /
@@ -70,3 +71,5 @@ Header
 1. flask token-based user login <a href='https://www.geeksforgeeks.org/using-jwt-for-user-authentication-in-flask/'>link</a>
 2. cloud sql connection <a href='https://cloud.google.com/sql/docs/mysql/connect-app-engine-standard'>link\[1\]</a> <a href='https://stackoverflow.com/questions/72588424/app-engine-cant-connect-to-cloud-sql-connection-refused'>link\[2\]</a>
 3. Google Oauth endpoint: https://www.googleapis.com/oauth2/v1/userinfo?access_token={token}
+4. Google VM Startup Script <a href='https://cloud.google.com/compute/docs/instances/startup-scripts/linux#order_of_execution_of_linux_startup_scripts'>link</a>
+5. Google scheduler start vm <a href='https://stackoverflow.com/questions/64526826/how-to-schedule-longer-python-scripts-in-gcp-without-cloud-functions'></a>

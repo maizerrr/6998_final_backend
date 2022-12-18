@@ -2,3 +2,4 @@ __pycache__/
 *DS_Store
 app.yaml
 .gcloudignore
+data_scraper/gcp_key.json
