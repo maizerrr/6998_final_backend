@@ -1,5 +1,6 @@
 from flask import Flask, Response, request
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from functools import wraps
 from datetime import datetime, timedelta
 from  werkzeug.security import generate_password_hash, check_password_hash
@@ -56,6 +57,7 @@ else:
 
 # Create the Flask application object.
 application = app = Flask(__name__)
+CORS(app)
 app.config['SECRET_KEY'] = json.dumps(GCP_KEY)
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
 db = SQLAlchemy(app)
